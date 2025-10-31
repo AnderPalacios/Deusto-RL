@@ -3,19 +3,18 @@ import time
 import matplotlib.pyplot as plt
 
 
+size = 2
 
-env = RubikCube(size=3)    
+env = RubikCube(size=size)    
 obs, info = env.reset()
-print(update_cube_array(obs, 3))
 env.render()
 
 
-for _ in range(3):
+for i in range(2): 
     action = env.action_space.sample()
     obs, reward, done, truncated, info = env.step(action)
     env.render(mode="ascii")  # Draw after each step
-    # env.render(mode="human")
-    time.sleep(0.2)
+    time.sleep(0.3)
     if done:
         print("done")
         break

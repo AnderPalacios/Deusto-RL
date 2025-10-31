@@ -5,7 +5,7 @@ import numpy as np
 from matplotlib.patches import Rectangle
 
 
-actionList = ['F CW', 'R CW', 'L CW', 'U CW', 'D CW', 'B CW', 'F CCW', 'R CCW', 'L CCW', 'U CCW', 'D CCW', 'B CCW']
+actionList = {0:'F CW', 1:'U CW', 2:'L CW', 3:'D CW', 4:'R CW', 5:'B CW', 6:'F CCW', 7:'U CCW', 8:'L CCW', 9:'D CCW', 10:'R CCW', 11:'B CCW'}
 
 tileDict = {'R' : 0, 'W' : 1, 'G' : 2, 'Y' : 3, 'B' : 4, 'O' : 5}
 
@@ -31,35 +31,41 @@ positions = {
     'D': (3,0)
 }}
 
+def print_action(action):
+    print(f"Action: {actionList[action]}")
+
 
 def update_cube_array(cube, size):
     coordinates = []
     for face in faces:
         for i in range(size):
             for j in range(size):
+                # print(f"Face: {face}, {i,j}, value: {cube[face][i,j]}")
                 coordinates.append(cube[face][i,j])
     return np.array(coordinates)
 
-def draw_cube_human(cube, size):
+# def draw_cube_human(cube, size):
 
-    if size != 2 and size != 3:
-        raise Exception("Invalid cube size. Must be 2x2 or 3x3")
+#     if size != 2 and size != 3:
+#         raise Exception("Invalid cube size. Must be 2x2 or 3x3")
     
-    plt.figure(figsize=(6,6))
-    ax = plt.gca()
-    ax.set_xlim(0, size*4+0.1)
-    ax.set_ylim(0, size*3)
-    ax.set_aspect('equal')
-    plt.axis('off')
+#     plt.figure(figsize=(6,6))
+#     ax = plt.gca()
+#     ax.set_xlim(0, size*4+0.1)
+#     ax.set_ylim(0, size*3)
+#     ax.set_aspect('equal')
+#     plt.axis('off')
 
-    for face, (x_off, y_off) in positions.get(str(size)).items():
-        for i in range(size):
-            for j in range(size):
-                color_idx = cube[face][i,j].item()
-                rect = Rectangle((x_off+j, y_off+size-1-i), 1,1, facecolor=colors[color_idx], edgecolor='black')
-                ax.add_patch(rect)
+#     for face, (x_off, y_off) in positions.get(str(size)).items():
+#         for i in range(size):
+#             for j in range(size):
+#                 color_idx = cube[face][i,j].item()
+#                 rect = Rectangle((x_off+j, y_off+size-1-i), 1,1, facecolor=colors[color_idx], edgecolor='black')
+#                 ax.add_patch(rect)
 
-    plt.show()
+#     plt.show()
+
+
 
 
 """
@@ -134,7 +140,7 @@ def draw_cube_ascii(cube, size):
             coords[51], coords[52], coords[53]   # Back (bottom row)
         ))
         print("└──┴──┴──┼──┼──┼──┼──┴──┴──┴──┴──┴──┘")
-        print("         │ {}│ {}│ {}│".format(coords[27], coords[28], coords[29]))   # Down
+        print("         │ {}│ {}│ {}│".format(coords[27], coords[28], coords[29]))   
         print("         ├──┼──┼──┤")
         print("         │ {}│ {}│ {}│".format(coords[30], coords[31], coords[32]))
         print("         ├──┼──┼──┤")
@@ -150,28 +156,177 @@ class RubikCube(gym.Env):
 
     def __init__(self, size):
         super(RubikCube, self).__init__()
+        plt.ion()  # Enable interactive mode
+        self.fig, self.ax = plt.subplots(figsize=(6,6))
+        self.ax.set_aspect('equal')
+        self.ax.axis('off')
+        self.ax.set_xlim(0, size*4)
+        self.ax.set_ylim(0, size*3)
+        self.rects = []
+
         self.size = size
         self.action_space = spaces.Discrete(12) # Each face (6) can rotate in 2 ways; Clockwise or Counterclockwise
-        if size == 2:
-            self.observation_space = spaces.Box(low=0, high=5, shape=(6,2,2), dtype=np.int8)
-            self.cube = {face: np.zeros((2,2), dtype=int) for face in faces}
-        elif size == 3:
-            self.observation_space = spaces.Box(low=0, high=5, shape=(6,3,3), dtype=np.int8)
-            self.cube = {face: np.zeros((3,3), dtype=int) for face in faces}
+        self.observation_space = spaces.Box(low=0, high=5, shape=(6,size,size), dtype=np.int8)
+        self.cube = {face: np.zeros((size,size), dtype=int) for face in faces}
 
     def reset(self, seed=None, options=None):
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
         return self.cube, {}
     
     def step(self, action):
-        # Yet to implement rotation logic
+        print_action(action) # Can remove this
+        face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
+        clockwise = action < 6
+        face = faces[face_index] # Face I'll update CW or CCW
+
+        self.rotate_face(face, clockwise)
+
         reward = 0
         done = False
         return self.cube, reward, done, False, {}
     
+
+    def draw_cube_human(self):
+        s = self.size
+        # first time: create rectangles
+        if not self.rects:
+            for face, (x_off, y_off) in positions[str(s)].items():
+                for i in range(s):
+                    for j in range(s):
+                        color_idx = self.cube[face][i,j].item()
+                        rect = Rectangle((x_off+j, y_off+s-1-i), 1, 1,
+                                         facecolor=colors[color_idx], edgecolor='black')
+                        self.ax.add_patch(rect)
+                        self.rects.append(rect)
+            self.fig.canvas.draw()
+        else:
+            # update colors
+            idx = 0
+            for face, (x_off, y_off) in positions[str(s)].items():
+                for i in range(s):
+                    for j in range(s):
+                        color_idx = self.cube[face][i,j].item()
+                        self.rects[idx].set_facecolor(colors[color_idx])
+                        idx += 1
+            self.fig.canvas.draw_idle()
+
+        plt.pause(0.01)
+
+
+    # Rotation logic     
+    def rotate_face(self, face, clockwise=True):
+        # Rotate the face itself
+        self.cube[face] = np.rot90(self.cube[face], -1 if clockwise else 1)
+        s = self.size
+        
+        # get the 2x2 or 3x3 faces
+        F, U, L, D, R, B = [self.cube[f] for f in faces]
+
+        """
+        After CW or CCW rotation of the face; update the neighborhood edges
+        The four neighboring edges around that face also move in a cycle
+
+        We go face by face updating the 4 adjacent faces got changed. 
+        There is of course 1 face where nothing changes (F,B,L,R,U,D are always with respect to F):
+        F(green)->B(blue)
+        L(orange)->R(red)
+        U(white)->D(yellow)
+        """
+        # FRONT
+        if face == 'F':
+            if clockwise: # CORRECT
+                temp = U[s-1, :].copy()
+                U[s-1, :] = np.flip(L[:, s-1])
+                L[:, s-1] = D[0, :]
+                D[0, :] = np.flip(R[:, 0])
+                R[:, 0] = temp
+            else:
+                temp = U[s-1, :].copy()
+                U[s-1, :] = R[:, 0]
+                R[:, 0] = np.flip(D[0, :])
+                D[0, :] = L[:, s-1]
+                L[:, s-1] = np.flip(temp)
+
+        # BACK
+        elif face == 'B':
+            if clockwise: # CORRECT
+                temp = U[0, :].copy() 
+                U[0, :] = R[:, s-1]
+                R[:, s-1] = np.flip(D[s-1, :])
+                D[s-1, :] = L[:, 0]
+                L[:, 0] = np.flip(temp)
+            else: # CORRECT
+                temp = U[0, :].copy() # U's top row woth respect to F
+                U[0, :] = L[:, 0]
+                L[:, 0] = D[s-1, :]
+                D[s-1, :] = R[:, 1]
+                R[:, s-1] = temp # Second column of R with respect to F is equal to U's top row
+
+        # UP
+        elif face == 'U':
+            if clockwise: # CORECT
+                temp = B[0, :].copy()
+                B[0, :] = L[0, :].copy()
+                L[0, :] = F[0, :].copy()
+                F[0, :] = R[0, :].copy()
+                R[0, :] = temp
+            else: # CORRECT
+                temp = B[0, :].copy()
+                B[0, :] = R[0, :].copy()
+                R[0, :] = F[0, :]
+                F[0, :] = L[0, :]
+                L[0, :] = temp
+
+        # DOWN
+        elif face == 'D':
+            if clockwise: # CORRECT
+                temp = F[s-1, :].copy()
+                F[s-1, :] = L[s-1, :].copy()
+                L[s-1, :] = B[s-1, :].copy()
+                B[s-1, :] = R[s-1, :].copy()
+                R[s-1, :] = temp
+            else: # CORRECT
+                temp = B[s-1, :].copy()
+                B[s-1, :] = L[s-1, :].copy()
+                L[s-1, :] = F[s-1, :].copy()
+                F[s-1, :] = R[s-1, :].copy()
+                R[s-1, :] = temp
+
+        # LEFT
+        elif face == 'L':
+            if clockwise: # CORRECT
+                temp = U[:, 0].copy()
+                U[:, 0] = np.flip(B[:, s-1])
+                B[:, s-1] = np.flip(D[:, 0])
+                D[:, 0] = F[:, 0]
+                F[:, 0] = temp
+            else:
+                temp = U[:, 0].copy()
+                U[:, 0] = F[:, 0]
+                F[:, 0] = D[:, 0]
+                D[:, 0] = np.flip(B[:, s-1])
+                B[:, s-1] = np.flip(temp)
+
+        # RIGHT
+        elif face == 'R':
+            if clockwise: # CORRECT
+                temp = U[:, s-1].copy()
+                U[:, s-1] = F[:, s-1]
+                F[:, s-1] = D[:, s-1]
+                D[:, s-1] = np.flip(B[:, 0])
+                B[:, 0] = np.flip(temp)
+            else: # CORRECT
+                temp = U[:, s-1].copy()
+                U[:, s-1] = np.flip(B[:, 0])
+                B[:, 0] = np.flip(D[:, s-1])
+                D[:, s-1] = F[:, s-1]
+                F[:, s-1] = temp
+
+
     def render(self, mode='human'):
         if mode == "human":
-            draw_cube_human(self.cube, self.size)
+            # self.draw_cube_human(self.cube, self.size)
+            self.draw_cube_human()
         elif mode == "ascii":
             draw_cube_ascii(self.cube, self.size)
 
@@ -181,4 +336,58 @@ class RubikCube(gym.Env):
 
     
 
+# class MyCustomEnv(gym.Env):
+#     metadata = {"render_modes": ["human", "ascii"], "render_fps": 4}
+
+#     def __init__(self, render_mode=None):
+#         super(MyCustomEnv, self).__init__()
+#         self.action_space = spaces.Discrete(2)
+#         self.observation_space = spaces.Box(low=0, high=1, shape=(1,), dtype=float)
+#         self.state = None
+#         self.render_mode = render_mode  # Can be "human" or "ascii"
+#         self.fig, self.ax = None, None  # For matplotlib
+
+#     def reset(self, seed=None, options=None):
+#         super().reset(seed=seed)
+#         self.state = 0.5
+#         if self.render_mode == "human":
+#             self._setup_render()
+#         return np.array([self.state]), {}
+
+#     def step(self, action):
+#         if action == 0:
+#             self.state -= 0.1
+#         else:
+#             self.state += 0.1
+#         self.state = float(np.clip(self.state, 0, 1))
+#         reward = self.state
+#         done = self.state >= 1
+#         info = {}
+#         if self.render_mode:
+#             self.render()
+#         return np.array([self.state]), reward, done, False, info
+
+#     def render(self):
+#         if self.render_mode == "ascii":
+#             bar_length = int(self.state * 20)
+#             print("[" + "#" * bar_length + "-" * (20 - bar_length) + f"] {self.state:.2f}")
+#         elif self.render_mode == "human":
+#             if self.fig is None or self.ax is None:
+#                 self._setup_render()
+#             self.ax.clear()
+#             self.ax.set_xlim(0, 1)
+#             self.ax.barh([0], [self.state], color='skyblue')
+#             self.ax.set_title(f"State = {self.state:.2f}")
+#             plt.pause(0.1)
+
+#     def _setup_render(self):
+#         plt.ion()
+#         self.fig, self.ax = plt.subplots()
+#         self.ax.set_xlim(0, 1)
+#         self.ax.set_ylim(-0.5, 0.5)
+#         plt.show()
+
+#     def close(self):
+#         if self.fig:
+#             plt.close(self.fig)
 
