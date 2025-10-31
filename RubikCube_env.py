@@ -44,28 +44,6 @@ def update_cube_array(cube, size):
                 coordinates.append(cube[face][i,j])
     return np.array(coordinates)
 
-# def draw_cube_human(cube, size):
-
-#     if size != 2 and size != 3:
-#         raise Exception("Invalid cube size. Must be 2x2 or 3x3")
-    
-#     plt.figure(figsize=(6,6))
-#     ax = plt.gca()
-#     ax.set_xlim(0, size*4+0.1)
-#     ax.set_ylim(0, size*3)
-#     ax.set_aspect('equal')
-#     plt.axis('off')
-
-#     for face, (x_off, y_off) in positions.get(str(size)).items():
-#         for i in range(size):
-#             for j in range(size):
-#                 color_idx = cube[face][i,j].item()
-#                 rect = Rectangle((x_off+j, y_off+size-1-i), 1,1, facecolor=colors[color_idx], edgecolor='black')
-#                 ax.add_patch(rect)
-
-#     plt.show()
-
-
 
 
 """
@@ -174,7 +152,7 @@ class RubikCube(gym.Env):
         return self.cube, {}
     
     def step(self, action):
-        print_action(action) # Can remove this
+        # print_action(action) 
         face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
         clockwise = action < 6
         face = faces[face_index] # Face I'll update CW or CCW
@@ -234,7 +212,7 @@ class RubikCube(gym.Env):
         """
         # FRONT
         if face == 'F':
-            if clockwise: # CORRECT
+            if clockwise: 
                 temp = U[s-1, :].copy()
                 U[s-1, :] = np.flip(L[:, s-1])
                 L[:, s-1] = D[0, :]
@@ -249,13 +227,13 @@ class RubikCube(gym.Env):
 
         # BACK
         elif face == 'B':
-            if clockwise: # CORRECT
+            if clockwise: 
                 temp = U[0, :].copy() 
                 U[0, :] = R[:, s-1]
                 R[:, s-1] = np.flip(D[s-1, :])
                 D[s-1, :] = L[:, 0]
                 L[:, 0] = np.flip(temp)
-            else: # CORRECT
+            else: 
                 temp = U[0, :].copy() # U's top row woth respect to F
                 U[0, :] = L[:, 0]
                 L[:, 0] = D[s-1, :]
@@ -264,13 +242,13 @@ class RubikCube(gym.Env):
 
         # UP
         elif face == 'U':
-            if clockwise: # CORECT
+            if clockwise: 
                 temp = B[0, :].copy()
                 B[0, :] = L[0, :].copy()
                 L[0, :] = F[0, :].copy()
                 F[0, :] = R[0, :].copy()
                 R[0, :] = temp
-            else: # CORRECT
+            else: 
                 temp = B[0, :].copy()
                 B[0, :] = R[0, :].copy()
                 R[0, :] = F[0, :]
@@ -279,13 +257,13 @@ class RubikCube(gym.Env):
 
         # DOWN
         elif face == 'D':
-            if clockwise: # CORRECT
+            if clockwise: 
                 temp = F[s-1, :].copy()
                 F[s-1, :] = L[s-1, :].copy()
                 L[s-1, :] = B[s-1, :].copy()
                 B[s-1, :] = R[s-1, :].copy()
                 R[s-1, :] = temp
-            else: # CORRECT
+            else: 
                 temp = B[s-1, :].copy()
                 B[s-1, :] = L[s-1, :].copy()
                 L[s-1, :] = F[s-1, :].copy()
@@ -294,7 +272,7 @@ class RubikCube(gym.Env):
 
         # LEFT
         elif face == 'L':
-            if clockwise: # CORRECT
+            if clockwise: 
                 temp = U[:, 0].copy()
                 U[:, 0] = np.flip(B[:, s-1])
                 B[:, s-1] = np.flip(D[:, 0])
@@ -309,13 +287,13 @@ class RubikCube(gym.Env):
 
         # RIGHT
         elif face == 'R':
-            if clockwise: # CORRECT
+            if clockwise: 
                 temp = U[:, s-1].copy()
                 U[:, s-1] = F[:, s-1]
                 F[:, s-1] = D[:, s-1]
                 D[:, s-1] = np.flip(B[:, 0])
                 B[:, 0] = np.flip(temp)
-            else: # CORRECT
+            else: 
                 temp = U[:, s-1].copy()
                 U[:, s-1] = np.flip(B[:, 0])
                 B[:, 0] = np.flip(D[:, s-1])
@@ -325,69 +303,6 @@ class RubikCube(gym.Env):
 
     def render(self, mode='human'):
         if mode == "human":
-            # self.draw_cube_human(self.cube, self.size)
             self.draw_cube_human()
         elif mode == "ascii":
             draw_cube_ascii(self.cube, self.size)
-
-
-
-    
-
-    
-
-# class MyCustomEnv(gym.Env):
-#     metadata = {"render_modes": ["human", "ascii"], "render_fps": 4}
-
-#     def __init__(self, render_mode=None):
-#         super(MyCustomEnv, self).__init__()
-#         self.action_space = spaces.Discrete(2)
-#         self.observation_space = spaces.Box(low=0, high=1, shape=(1,), dtype=float)
-#         self.state = None
-#         self.render_mode = render_mode  # Can be "human" or "ascii"
-#         self.fig, self.ax = None, None  # For matplotlib
-
-#     def reset(self, seed=None, options=None):
-#         super().reset(seed=seed)
-#         self.state = 0.5
-#         if self.render_mode == "human":
-#             self._setup_render()
-#         return np.array([self.state]), {}
-
-#     def step(self, action):
-#         if action == 0:
-#             self.state -= 0.1
-#         else:
-#             self.state += 0.1
-#         self.state = float(np.clip(self.state, 0, 1))
-#         reward = self.state
-#         done = self.state >= 1
-#         info = {}
-#         if self.render_mode:
-#             self.render()
-#         return np.array([self.state]), reward, done, False, info
-
-#     def render(self):
-#         if self.render_mode == "ascii":
-#             bar_length = int(self.state * 20)
-#             print("[" + "#" * bar_length + "-" * (20 - bar_length) + f"] {self.state:.2f}")
-#         elif self.render_mode == "human":
-#             if self.fig is None or self.ax is None:
-#                 self._setup_render()
-#             self.ax.clear()
-#             self.ax.set_xlim(0, 1)
-#             self.ax.barh([0], [self.state], color='skyblue')
-#             self.ax.set_title(f"State = {self.state:.2f}")
-#             plt.pause(0.1)
-
-#     def _setup_render(self):
-#         plt.ion()
-#         self.fig, self.ax = plt.subplots()
-#         self.ax.set_xlim(0, 1)
-#         self.ax.set_ylim(-0.5, 0.5)
-#         plt.show()
-
-#     def close(self):
-#         if self.fig:
-#             plt.close(self.fig)
-
