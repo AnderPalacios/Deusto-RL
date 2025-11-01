@@ -370,12 +370,11 @@ class RubikCube(gym.Env):
                 F[:, s-1] = temp
 
     def render(self, render_mode="human"):
-        self.render_mode = render_mode
-        if self.render_mode == "human":
+        if render_mode == "human":
             self.draw_cube_human()
-        elif self.render_mode == "ascii":
+        elif render_mode == "ascii":
             draw_cube_ascii(self.cube, self.size)
-        elif self.render_mode is None:
+        elif render_mode is None:
             pass
     
     def scramble(self):
