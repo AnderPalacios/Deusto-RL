@@ -27,10 +27,12 @@ model = PPO(
 )
 
 
-model.learn(total_timesteps=2000) 
+model.learn(total_timesteps=5000) 
 
 
 inner_env = env.envs[0]
+inner_env.render(mode="human")
+time.sleep(4)
 obs, info = inner_env.reset()
 done = False
 total_reward = 0
@@ -41,4 +43,4 @@ while not done:
     total_reward += reward
     print(f"Step reward: {reward}")
     inner_env.render(mode="human")
-    time.sleep(0.5)  
+    time.sleep(1)  

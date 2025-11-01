@@ -147,6 +147,7 @@ class RubikCube(gym.Env):
         self.max_steps = 100
         self.current_step = 0
         self.size = size
+        # self.valid_actions = [10,4]
         self.action_space = spaces.Discrete(12) # Each face (6) can rotate in 2 ways; Clockwise or Counterclockwise
         self.observation_space = spaces.Box(low=0, high=5, shape=(6*size*size,), dtype=np.int8)
         self.cube = {face: np.zeros((size,size), dtype=int) for face in faces}
@@ -156,7 +157,7 @@ class RubikCube(gym.Env):
         
         self.current_step = 0
         if self.difficulty == 1:
-            self.max_steps = 10
+            self.max_steps = 2
             self.scramble()
         return self.dict_to_array(self.cube), {}
     
@@ -178,6 +179,7 @@ class RubikCube(gym.Env):
 
         obs_array = self.dict_to_array(self.cube)
         return obs_array, reward, done, False, {}
+
     
 
     def is_solved(self):
@@ -201,7 +203,7 @@ class RubikCube(gym.Env):
         if self.last_action is not None:
             # Check if this action is the opposite of the last
             if action // 6 == self.last_action // 6 and action % 6 != self.last_action % 6:
-                reward -= 5.0  # small penalty
+                reward -= 1000.0  # small penalty
         
         # Otherwise, reward is just the number of correct tiles
         return float(correct_tiles)
@@ -357,7 +359,8 @@ class RubikCube(gym.Env):
         if self.difficulty == 1:
             # Initial observation: R CCW → U CCW → B CW
             self.rotate_face('R', clockwise=False)
-            # self.rotate_face('U', clockwise=False)
+            # self.rotate_face('R', clockwise=False) # This one twice
+            self.rotate_face('U', clockwise=False)
             # self.rotate_face('B', clockwise=True)
 
     def dict_to_array(self, cube_dict):
