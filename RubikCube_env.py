@@ -3,11 +3,10 @@ from gymnasium import spaces
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
+import kociemba
 
 
 actionList = {0:'F CW', 1:'U CW', 2:'L CW', 3:'D CW', 4:'R CW', 5:'B CW', 6:'F CCW', 7:'U CCW', 8:'L CCW', 9:'D CCW', 10:'R CCW', 11:'B CCW'}
-
-tileDict = {'R' : 0, 'W' : 1, 'G' : 2, 'Y' : 3, 'B' : 4, 'O' : 5}
 
 faces = ['F', 'U', 'L', 'D', 'R', 'B']
 
@@ -44,7 +43,42 @@ def update_cube_array(cube, size):
                 coordinates.append(cube[face][i,j])
     return np.array(coordinates)
 
+def optimum_solution_length(cube, size):
+    n_moves = -1
+    cube_str = ''
+    if size == 3:
+        orden = ['U', 'R', 'F', 'D', 'L', 'B']
+        for face in orden:
+            for i in range(size):
+                for j in range(size):
+                    num = cube[face][i, j]
+                    match num:
+                        case 0:
+                            cube_str += 'F'  # Green
+                        case 1:
+                            cube_str += 'U'  # White
+                        case 2:
+                            cube_str += 'L'  # Orange
+                        case 3:
+                            cube_str += 'D'  # Yellow
+                        case 4:
+                            cube_str += 'R'  # Red
+                        case 5:
+                            cube_str += 'B'  # Blue
+        
+        solution = kociemba.solve(cube_str)
+        n_moves = len(solution.split())
+    elif size == 2:
+        pass  # Falta hacer para el 2x2
 
+    return n_moves
+
+def reward_exp_neg(n_moves):
+    if n_moves is None or n_moves < 0:
+        return -1.0
+    n = int(n_moves)
+    alpha = 0.2  # suavizar reward
+    return -float(1.0 - np.exp(-alpha * n))
 
 """
        ┌──┬──┐
@@ -130,11 +164,12 @@ def draw_cube_ascii(cube, size):
 
 
 class RubikCube(gym.Env):
-    metadata = {"render_modes": ["human","ascii"]}
+    metadata = {"render_modes": ["human","ascii", None]}
 
-    def __init__(self, size, difficulty_level=1):
+    def __init__(self, size, difficulty_level=1, render_mode="human"):
         super(RubikCube, self).__init__()
         plt.ion()  # Enable interactive mode
+        self.render_mode = render_mode
         self.fig, self.ax = plt.subplots(figsize=(6,6))
         self.ax.set_aspect('equal')
         self.ax.axis('off')
@@ -154,7 +189,7 @@ class RubikCube(gym.Env):
 
     def reset(self, seed=None, options=None):
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
-        
+        self.render(self.render_mode)
         self.current_step = 0
         if self.difficulty == 1:
             self.max_steps = 2
@@ -162,6 +197,25 @@ class RubikCube(gym.Env):
         return self.dict_to_array(self.cube), {}
     
     def step(self, action):
+        # print_action(action) 
+        face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
+        clockwise = action < 6
+        face = faces[face_index] # Face I'll update CW or CCW
+        self.rotate_face(face, clockwise)
+        self.render(self.render_mode)
+        n_moves = optimum_solution_length(self.cube, self.size)
+        reward = 0.0
+        if n_moves == 0:
+            pass
+        elif n_moves == -1:
+            pass
+        else:
+            reward = reward_exp_neg(n_moves)
+        reward = 0
+        done = False
+        return self.cube, reward, done, False, {}
+    
+    def step2(self, action):
         # print_action(action) 
         face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
         clockwise = action < 6
@@ -179,37 +233,6 @@ class RubikCube(gym.Env):
 
         obs_array = self.dict_to_array(self.cube)
         return obs_array, reward, done, False, {}
-
-    
-
-    def is_solved(self):
-        for i, face in enumerate(faces):
-            if not np.all(self.cube[face] == i):
-                return False
-        return True
-    
-
-    # Possible reward function -> Number of correct tiles
-    def get_reward(self, action):
-        total_tiles = self.size**2 * 6
-        correct_tiles = sum(np.sum(self.cube[face] == i) for i, face in enumerate(faces))
-        
-        reward = correct_tiles / total_tiles
-
-        # Big reward if the cube is fully solved
-        if correct_tiles == total_tiles:
-            reward += 100.0
-        
-        if self.last_action is not None:
-            # Check if this action is the opposite of the last
-            if action // 6 == self.last_action // 6 and action % 6 != self.last_action % 6:
-                reward -= 1000.0  # small penalty
-        
-        # Otherwise, reward is just the number of correct tiles
-        return float(correct_tiles)
-
-
-
 
     def draw_cube_human(self):
         s = self.size
@@ -234,8 +257,8 @@ class RubikCube(gym.Env):
                         self.rects[idx].set_facecolor(colors[color_idx])
                         idx += 1
             self.fig.canvas.draw_idle()
-
-        plt.pause(0.1) #0.1
+        # self.fig.canvas.flush_events()
+        plt.pause(0.1)
 
 
     # Rotation logic     
@@ -282,11 +305,10 @@ class RubikCube(gym.Env):
                 L[:, 0] = np.flip(temp)
             else: 
                 temp = U[0, :].copy() # U's top row woth respect to F
-                U[0, :] = L[:, 0]
+                U[0, :] = np.flip(L[:, 0])
                 L[:, 0] = D[s-1, :]
                 D[s-1, :] = R[:, s-1]
                 R[:, s-1] = temp # Second column of R with respect to F is equal to U's top row
-
         # UP
         elif face == 'U':
             if clockwise: 
@@ -347,13 +369,14 @@ class RubikCube(gym.Env):
                 D[:, s-1] = F[:, s-1]
                 F[:, s-1] = temp
 
-
-    def render(self, mode='human'):
-        if mode == "human":
+    def render(self, render_mode="human"):
+        self.render_mode = render_mode
+        if self.render_mode == "human":
             self.draw_cube_human()
-        elif mode == "ascii":
+        elif self.render_mode == "ascii":
             draw_cube_ascii(self.cube, self.size)
-
+        elif self.render_mode is None:
+            pass
     
     def scramble(self):
         if self.difficulty == 1:
@@ -416,4 +439,3 @@ class RubikCube(gym.Env):
                 print("Some rotations cause mismatches.")
 
         return consistent
-
