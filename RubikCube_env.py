@@ -166,7 +166,7 @@ def draw_cube_ascii(cube, size):
 class RubikCube(gym.Env):
     metadata = {"render_modes": ["human","ascii", None]}
 
-    def __init__(self, size, difficulty_level=1, render_mode="human"):
+    def __init__(self, size, difficulty_level=1, render_mode="human", ):
         super(RubikCube, self).__init__()
         plt.ion()  # Enable interactive mode
         self.render_mode = render_mode
@@ -178,10 +178,12 @@ class RubikCube(gym.Env):
         self.rects = []
 
         self.last_action = None
+        self.before_last_action = None
         self.difficulty = difficulty_level
         self.max_steps = 100
         self.current_step = 0
         self.size = size
+        self.ant_n_moves = 0
         # self.valid_actions = [10,4]
         self.action_space = spaces.Discrete(12) # Each face (6) can rotate in 2 ways; Clockwise or Counterclockwise
         self.observation_space = spaces.Box(low=0, high=5, shape=(6*size*size,), dtype=np.int8)
@@ -189,11 +191,15 @@ class RubikCube(gym.Env):
 
     def reset(self, seed=None, options=None):
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
-        self.render(self.render_mode)
         self.current_step = 0
         if self.difficulty == 1:
             self.max_steps = 2
             self.scramble()
+        elif self.difficulty == 2:
+            self.max_steps = 20
+            self.scramble()
+        self.render(self.render_mode)
+        self.ant_n_moves = optimum_solution_length(self.cube, self.size)
         return self.dict_to_array(self.cube), {}
     
     def step(self, action):
@@ -205,16 +211,39 @@ class RubikCube(gym.Env):
         self.render(self.render_mode)
         n_moves = optimum_solution_length(self.cube, self.size)
         reward = 0.0
-        if n_moves == 0:
-            pass
-        elif n_moves == -1:
-            pass
-        else:
-            reward = reward_exp_neg(n_moves)
-        reward = 0
+        if n_moves > 0:
+            if n_moves > self.ant_n_moves:
+                reward = -1.0 
+                
+            elif n_moves < self.ant_n_moves:
+                reward += 1.0
+            if self.last_action is not None:
+                face_index_ant = self.last_action % 6
+                clockwise_ant = self.last_action < 6
+                if face_index == face_index_ant and clockwise != clockwise_ant:
+                    reward -= 2.0
+                if self.before_last_action is not None:
+                    face_index_before_ant = self.before_last_action % 6
+                    clockwise_before_ant = self.before_last_action < 6
+                    if face_index == face_index_before_ant and clockwise == clockwise_before_ant and face_index == face_index_ant and clockwise == clockwise_ant:
+                        reward -= 5.0
+
+            reward += reward_exp_neg(n_moves)
+        self.ant_n_moves = n_moves
+        self.before_last_action = self.last_action
+        self.last_action = action
         done = False
-        return self.cube, reward, done, False, {}
-    
+        truncated = False
+        self.current_step += 1
+        if self.is_solved():
+            done = True
+            reward = 5
+        elif self.current_step >= self.max_steps:
+            truncated = True
+            reward -= 5
+        obs_array = self.dict_to_array(self.cube)
+        return obs_array, reward, done, truncated, {}
+
     def step2(self, action):
         # print_action(action) 
         face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
@@ -307,7 +336,7 @@ class RubikCube(gym.Env):
                 temp = U[0, :].copy() # U's top row woth respect to F
                 U[0, :] = np.flip(L[:, 0])
                 L[:, 0] = D[s-1, :]
-                D[s-1, :] = R[:, s-1]
+                D[s-1, :] = np.flip(R[:, s-1])
                 R[:, s-1] = temp # Second column of R with respect to F is equal to U's top row
         # UP
         elif face == 'U':
@@ -377,6 +406,13 @@ class RubikCube(gym.Env):
         elif render_mode is None:
             pass
     
+
+    def is_solved(self):
+        for face in faces:
+            if not np.all(self.cube[face] == self.cube[face][0,0]):
+                return False
+        return True
+    
     def scramble(self):
         if self.difficulty == 1:
             # Initial observation: R CCW → U CCW → B CW
@@ -384,6 +420,11 @@ class RubikCube(gym.Env):
             # self.rotate_face('R', clockwise=False) # This one twice
             self.rotate_face('U', clockwise=False)
             # self.rotate_face('B', clockwise=True)
+        if self.difficulty == 2:
+            # More complex scramble
+            moves = [('R', False), ('U', False), ('B', True), ('L', True), ('D', False), ('F', True), ('R', True), ('U', True)]
+            for face, clockwise in moves:
+                self.rotate_face(face, clockwise)
 
     def dict_to_array(self, cube_dict):
         arr = np.zeros((6, self.size, self.size), dtype=np.int8)
