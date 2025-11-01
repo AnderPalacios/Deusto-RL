@@ -132,7 +132,7 @@ def draw_cube_ascii(cube, size):
 class RubikCube(gym.Env):
     metadata = {"render_modes": ["human","ascii"]}
 
-    def __init__(self, size):
+    def __init__(self, size, difficulty_level=1):
         super(RubikCube, self).__init__()
         plt.ion()  # Enable interactive mode
         self.fig, self.ax = plt.subplots(figsize=(6,6))
@@ -142,14 +142,23 @@ class RubikCube(gym.Env):
         self.ax.set_ylim(0, size*3)
         self.rects = []
 
+        self.last_action = None
+        self.difficulty = difficulty_level
+        self.max_steps = 100
+        self.current_step = 0
         self.size = size
         self.action_space = spaces.Discrete(12) # Each face (6) can rotate in 2 ways; Clockwise or Counterclockwise
-        self.observation_space = spaces.Box(low=0, high=5, shape=(6,size,size), dtype=np.int8)
+        self.observation_space = spaces.Box(low=0, high=5, shape=(6*size*size,), dtype=np.int8)
         self.cube = {face: np.zeros((size,size), dtype=int) for face in faces}
 
     def reset(self, seed=None, options=None):
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
-        return self.cube, {}
+        
+        self.current_step = 0
+        if self.difficulty == 1:
+            self.max_steps = 10
+            self.scramble()
+        return self.dict_to_array(self.cube), {}
     
     def step(self, action):
         # print_action(action) 
@@ -159,10 +168,46 @@ class RubikCube(gym.Env):
 
         self.rotate_face(face, clockwise)
 
-        reward = 0
-        done = False
-        return self.cube, reward, done, False, {}
+        ######################## Might change this reward, just trying 
+        reward = self.get_reward(action)  # <-- shaped reward
+
+        self.last_action = action
+        self.current_step += 1
+
+        done = self.is_solved() or self.current_step >= self.max_steps
+
+        obs_array = self.dict_to_array(self.cube)
+        return obs_array, reward, done, False, {}
     
+
+    def is_solved(self):
+        for i, face in enumerate(faces):
+            if not np.all(self.cube[face] == i):
+                return False
+        return True
+    
+
+    # Possible reward function -> Number of correct tiles
+    def get_reward(self, action):
+        total_tiles = self.size**2 * 6
+        correct_tiles = sum(np.sum(self.cube[face] == i) for i, face in enumerate(faces))
+        
+        reward = correct_tiles / total_tiles
+
+        # Big reward if the cube is fully solved
+        if correct_tiles == total_tiles:
+            reward += 100.0
+        
+        if self.last_action is not None:
+            # Check if this action is the opposite of the last
+            if action // 6 == self.last_action // 6 and action % 6 != self.last_action % 6:
+                reward -= 5.0  # small penalty
+        
+        # Otherwise, reward is just the number of correct tiles
+        return float(correct_tiles)
+
+
+
 
     def draw_cube_human(self):
         s = self.size
@@ -188,7 +233,7 @@ class RubikCube(gym.Env):
                         idx += 1
             self.fig.canvas.draw_idle()
 
-        plt.pause(0.01)
+        plt.pause(0.1) #0.1
 
 
     # Rotation logic     
@@ -237,7 +282,7 @@ class RubikCube(gym.Env):
                 temp = U[0, :].copy() # U's top row woth respect to F
                 U[0, :] = L[:, 0]
                 L[:, 0] = D[s-1, :]
-                D[s-1, :] = R[:, 1]
+                D[s-1, :] = R[:, s-1]
                 R[:, s-1] = temp # Second column of R with respect to F is equal to U's top row
 
         # UP
@@ -306,3 +351,66 @@ class RubikCube(gym.Env):
             self.draw_cube_human()
         elif mode == "ascii":
             draw_cube_ascii(self.cube, self.size)
+
+    
+    def scramble(self):
+        if self.difficulty == 1:
+            # Initial observation: R CCW → U CCW → B CW
+            self.rotate_face('R', clockwise=False)
+            # self.rotate_face('U', clockwise=False)
+            # self.rotate_face('B', clockwise=True)
+
+    def dict_to_array(self, cube_dict):
+        arr = np.zeros((6, self.size, self.size), dtype=np.int8)
+        for i, face in enumerate(faces):
+            arr[i] = cube_dict[face]
+        return arr.flatten()
+
+    def verify_consistency(self, verbose=True):
+        """
+        Verifies that for every face, performing CW followed by CCW
+        returns the cube to its original solved state.
+        """
+        self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
+        original_state = {f: self.cube[f].copy() for f in faces}
+        consistent = True
+
+        def is_solved():
+            for f in faces:
+                if not np.array_equal(self.cube[f], original_state[f]):
+                    return False
+            return True
+
+        def reset_cube():
+            for f in faces:
+                self.cube[f] = original_state[f].copy()
+
+        # Test both directions
+        for f in faces:
+            # CW then CCW
+            self.rotate_face(f, clockwise=True)
+            self.rotate_face(f, clockwise=False)
+            if not is_solved():
+                consistent = False
+                if verbose:
+                    print(f"Inconsistency found for face {f} (CW→CCW)")
+            reset_cube()
+
+            # CCW then CW
+            self.rotate_face(f, clockwise=False)
+            self.rotate_face(f, clockwise=True)
+            if not is_solved():
+                consistent = False
+                if verbose:
+                    print(f"Inconsistency found for face {f} (CCW→CW)")
+            reset_cube()
+
+        if consistent:
+            if verbose:
+                print("All face rotations are internally consistent.")
+        else:
+            if verbose:
+                print("Some rotations cause mismatches.")
+
+        return consistent
+
