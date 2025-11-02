@@ -69,8 +69,11 @@ def optimum_solution_length(cube, size):
         
         solution = kociemba.solve(cube_str)
         n_moves = len(solution.split())
+        n_twos = solution.count('2')
+        if n_twos:
+            n_moves += n_twos
     elif size == 2:
-        pass  # Falta hacer para el 2x2
+        pass
 
     return n_moves
 
@@ -199,6 +202,9 @@ class RubikCube(gym.Env):
         elif self.difficulty == 2:
             self.max_steps = 20
             self.scramble()
+        elif self.difficulty >= 3:
+            self.max_steps = 5+10*self.difficulty
+            self.scramble()
         self.last_10_states_set = set()
         self.last_10_states_deque = deque(maxlen=10)
         self.render(self.render_mode)
@@ -220,7 +226,7 @@ class RubikCube(gym.Env):
                 
             elif n_moves < self.ant_n_moves:
                 reward += 3.0
-            reward -= self.repeated_state() * 2.0
+            reward -= self.repeated_state() * 5.0
 
             reward += reward_exp_neg(n_moves)
         self.ant_n_moves = n_moves
@@ -229,7 +235,7 @@ class RubikCube(gym.Env):
         self.current_step += 1
         if self.is_solved():
             done = True
-            reward = 5
+            reward = 20.0
         elif self.current_step >= self.max_steps:
             truncated = True
             reward -= 5
@@ -407,6 +413,12 @@ class RubikCube(gym.Env):
             moves = [('R', False), ('U', False), ('B', True), ('L', True), ('D', False), ('F', True), ('R', True), ('U', True)]
             for face, clockwise in moves:
                 self.rotate_face(face, clockwise)
+        if self.difficulty >= 3:
+            for i in range(self.difficulty):
+                face = faces[np.random.randint(0,6)]
+                clockwise = np.random.choice([True, False])
+                self.rotate_face(face, clockwise)
+
 
     def dict_to_array(self, cube_dict):
         arr = np.zeros((6, self.size, self.size), dtype=np.int8)
