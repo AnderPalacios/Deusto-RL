@@ -181,6 +181,7 @@ class RubikCube(gym.Env):
         self.ax.set_ylim(0, size*3)
         self.rects = []
 
+        self.scrambled_steps = None
         self.last_10_states_set = set()
         self.last_10_states_deque = deque(maxlen=10)
         self.difficulty = difficulty_level
@@ -197,10 +198,10 @@ class RubikCube(gym.Env):
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
         self.current_step = 0
         if self.difficulty == 1:
-            self.max_steps = 2
+            self.max_steps = 6
             self.scramble()
         elif self.difficulty == 2:
-            self.max_steps = 20
+            self.max_steps = 8
             self.scramble()
         elif self.difficulty >= 3:
             self.max_steps = 5+10*self.difficulty
@@ -256,6 +257,46 @@ class RubikCube(gym.Env):
                         self.ax.add_patch(rect)
                         self.rects.append(rect)
             self.fig.canvas.draw()
+            
+            # --- Title ---
+            self.title_text = self.fig.text(
+                0.5, 0.95,
+                "Rubik's Cube Environment",
+                fontsize=16, ha='center', va='top', fontweight='bold'
+            )
+
+            action_colors = {
+                "U": "gray", "U'": "gray",
+                "F": "green", "F'": "green",
+                "L": "orange", "L'": "orange",
+                "D": "yellow", "D'": "yellow",
+                "R": "red", "R'": "red",
+                "B": "blue", "B'": "blue"
+            }
+
+            self.subtitle_text = self.fig.text(
+                0.3, 0.89,
+                "Available actions:", fontsize=12, ha='center', va='top', fontweight="bold"
+            )
+
+            x_pos = 0.45
+            y_pos = 0.89
+            spacing = 0.04
+            for i, action in enumerate(["U", "U'", "F", "F'", "L", "L'", "D", "D'", "R", "R'", "B", "B'"]):
+                self.fig.text(
+                    x_pos + i*spacing, y_pos, action,
+                    fontsize=12, color=action_colors[action],
+                    ha='center', va='top', fontweight="bold"
+                )
+            self.fig.canvas.draw()
+
+            ######### Scrambled steps text
+            self.status_text = self.fig.text(
+                0.25, 0.08, "", fontsize=12, ha='left', va='center', fontweight="bold"
+            )
+            if self.scrambled_steps:
+                moves_str = ", ".join(self.scrambled_steps)
+                self.status_text.set_text(f"Scrambled steps: {moves_str}")
         else:
             # update colors
             idx = 0
@@ -267,7 +308,7 @@ class RubikCube(gym.Env):
                         idx += 1
             self.fig.canvas.draw_idle()
         # self.fig.canvas.flush_events()
-        plt.pause(0.1)
+        plt.pause(0.3)
 
 
     # Rotation logic     
@@ -402,23 +443,33 @@ class RubikCube(gym.Env):
         return True
     
     def scramble(self):
+        self.scrambled_steps = []
         if self.difficulty == 1:
             # Initial observation: R CCW → U CCW → B CW
-            self.rotate_face('R', clockwise=False)
-            # self.rotate_face('R', clockwise=False) # This one twice
-            self.rotate_face('U', clockwise=False)
+            # self.rotate_face('R', clockwise=False)
+            # self.rotate_face('U', clockwise=False)
             # self.rotate_face('B', clockwise=True)
+            # self.rotate_face('D', clockwise=False)
+            # self.rotate_face('L', clockwise=True)
+            moves = [('R', False), ('U', False), ('B', True), ('D', False), ('L', True), ('F', False)]
+            for face, clockwise in moves:
+                self.rotate_face(face, clockwise)
+                move_name = face + ("" if clockwise else "'")
+                self.scrambled_steps.append(move_name)
         if self.difficulty == 2:
             # More complex scramble
             moves = [('R', False), ('U', False), ('B', True), ('L', True), ('D', False), ('F', True), ('R', True), ('U', True)]
             for face, clockwise in moves:
                 self.rotate_face(face, clockwise)
+                move_name = face + ("" if clockwise else "'")
+                self.scrambled_steps.append(move_name)
         if self.difficulty >= 3:
             for i in range(self.difficulty):
                 face = faces[np.random.randint(0,6)]
                 clockwise = np.random.choice([True, False])
                 self.rotate_face(face, clockwise)
-
+                move_name = face + ("" if clockwise else "'")
+                self.scrambled_steps.append(move_name)
 
     def dict_to_array(self, cube_dict):
         arr = np.zeros((6, self.size, self.size), dtype=np.int8)
