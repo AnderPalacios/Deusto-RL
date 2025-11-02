@@ -23,7 +23,7 @@ model = PPO(
     n_steps=2048,          # 1 env -> 2048 muestras por actualización
     batch_size=256,        # divisor de 2048
     n_epochs=10,           # típicamente 10
-    learning_rate=2.5e-4,  # estable para PPO
+    learning_rate=8e-4,  # estable para PPO
     gamma=0.995,           # horizonte largo
     gae_lambda=0.95,
     clip_range=0.2,
@@ -37,7 +37,7 @@ model = PPO(
 
 
 
-model.learn(total_timesteps=30000)
+model.learn(total_timesteps=100000)
 
 
 inner_env = env.envs[0]

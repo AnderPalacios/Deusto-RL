@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Rectangle
 import kociemba
+from collections import deque
 
 
 actionList = {0:'F CW', 1:'U CW', 2:'L CW', 3:'D CW', 4:'R CW', 5:'B CW', 6:'F CCW', 7:'U CCW', 8:'L CCW', 9:'D CCW', 10:'R CCW', 11:'B CCW'}
@@ -177,8 +178,8 @@ class RubikCube(gym.Env):
         self.ax.set_ylim(0, size*3)
         self.rects = []
 
-        self.last_action = None
-        self.before_last_action = None
+        self.last_10_states_set = set()
+        self.last_10_states_deque = deque(maxlen=10)
         self.difficulty = difficulty_level
         self.max_steps = 100
         self.current_step = 0
@@ -198,6 +199,8 @@ class RubikCube(gym.Env):
         elif self.difficulty == 2:
             self.max_steps = 20
             self.scramble()
+        self.last_10_states_set = set()
+        self.last_10_states_deque = deque(maxlen=10)
         self.render(self.render_mode)
         self.ant_n_moves = optimum_solution_length(self.cube, self.size)
         return self.dict_to_array(self.cube), {}
@@ -216,22 +219,11 @@ class RubikCube(gym.Env):
                 reward = -1.0 
                 
             elif n_moves < self.ant_n_moves:
-                reward += 1.0
-            if self.last_action is not None:
-                face_index_ant = self.last_action % 6
-                clockwise_ant = self.last_action < 6
-                if face_index == face_index_ant and clockwise != clockwise_ant:
-                    reward -= 2.0
-                if self.before_last_action is not None:
-                    face_index_before_ant = self.before_last_action % 6
-                    clockwise_before_ant = self.before_last_action < 6
-                    if face_index == face_index_before_ant and clockwise == clockwise_before_ant and face_index == face_index_ant and clockwise == clockwise_ant:
-                        reward -= 5.0
+                reward += 3.0
+            reward -= self.repeated_state() * 2.0
 
             reward += reward_exp_neg(n_moves)
         self.ant_n_moves = n_moves
-        self.before_last_action = self.last_action
-        self.last_action = action
         done = False
         truncated = False
         self.current_step += 1
@@ -244,24 +236,6 @@ class RubikCube(gym.Env):
         obs_array = self.dict_to_array(self.cube)
         return obs_array, reward, done, truncated, {}
 
-    def step2(self, action):
-        # print_action(action) 
-        face_index = action % 6 # ['F CW', 'U CW', 'L CW', 'D CW', 'R CW', 'B CW', 'F CCW', 'U CCW', 'L CCW', 'D CCW', 'R CCW', 'B CCW']
-        clockwise = action < 6
-        face = faces[face_index] # Face I'll update CW or CCW
-
-        self.rotate_face(face, clockwise)
-
-        ######################## Might change this reward, just trying 
-        reward = self.get_reward(action)  # <-- shaped reward
-
-        self.last_action = action
-        self.current_step += 1
-
-        done = self.is_solved() or self.current_step >= self.max_steps
-
-        obs_array = self.dict_to_array(self.cube)
-        return obs_array, reward, done, False, {}
 
     def draw_cube_human(self):
         s = self.size
@@ -405,7 +379,15 @@ class RubikCube(gym.Env):
             draw_cube_ascii(self.cube, self.size)
         elif render_mode is None:
             pass
-    
+    def repeated_state(self):
+        key = self.dict_to_array(self.cube).tobytes()
+        rep = self.last_10_states_deque.count(key)
+        if len(self.last_10_states_deque) == self.last_10_states_deque.maxlen:
+            old = self.last_10_states_deque.popleft()
+            self.last_10_states_set.discard(old)
+        self.last_10_states_deque.append(key)
+        self.last_10_states_set.add(key)
+        return rep
 
     def is_solved(self):
         for face in faces:
