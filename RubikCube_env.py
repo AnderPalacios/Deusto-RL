@@ -5,6 +5,8 @@ import numpy as np
 from matplotlib.patches import Rectangle
 import kociemba
 from collections import deque
+import random
+import time
 
 
 actionList = {0:'F CW', 1:'U CW', 2:'L CW', 3:'D CW', 4:'R CW', 5:'B CW', 6:'F CCW', 7:'U CCW', 8:'L CCW', 9:'D CCW', 10:'R CCW', 11:'B CCW'}
@@ -74,7 +76,6 @@ def optimum_solution_length(cube, size):
             n_moves += n_twos
     elif size == 2:
         pass
-
     return n_moves
 
 def reward_exp_neg(n_moves):
@@ -195,16 +196,23 @@ class RubikCube(gym.Env):
         self.cube = {face: np.zeros((size,size), dtype=int) for face in faces}
 
     def reset(self, seed=None, options=None):
+        if seed is not None:
+            random.seed(seed)
+        else:
+            random.seed(time.time())
         self.cube = {face: np.full((self.size, self.size), i, dtype=int) for i, face in enumerate(faces)}
         self.current_step = 0
         if self.difficulty == 1:
-            self.max_steps = 6
+            self.max_steps = 3
             self.scramble()
         elif self.difficulty == 2:
-            self.max_steps = 8
+            self.max_steps = 6
             self.scramble()
-        elif self.difficulty >= 3:
-            self.max_steps = 5+10*self.difficulty
+        elif self.difficulty == 3:
+            self.max_steps = 10
+            self.scramble()
+        elif self.difficulty == 4:
+            self.max_steps = 14
             self.scramble()
         self.last_10_states_set = set()
         self.last_10_states_deque = deque(maxlen=10)
@@ -257,8 +265,8 @@ class RubikCube(gym.Env):
                         self.ax.add_patch(rect)
                         self.rects.append(rect)
             self.fig.canvas.draw()
-            
-            # --- Title ---
+
+                        # --- Title ---
             self.title_text = self.fig.text(
                 0.5, 0.95,
                 "Rubik's Cube Environment",
@@ -292,11 +300,12 @@ class RubikCube(gym.Env):
 
             ######### Scrambled steps text
             self.status_text = self.fig.text(
-                0.25, 0.08, "", fontsize=12, ha='left', va='center', fontweight="bold"
+                0.1, 0.08, "", fontsize=12, ha='left', va='center', fontweight="bold"
             )
             if self.scrambled_steps:
                 moves_str = ", ".join(self.scrambled_steps)
                 self.status_text.set_text(f"Scrambled steps: {moves_str}")
+
         else:
             # update colors
             idx = 0
@@ -444,32 +453,31 @@ class RubikCube(gym.Env):
     
     def scramble(self):
         self.scrambled_steps = []
+        available_moves = [('F', True), ('F', False),
+                           ('U', True), ('U', False),
+                           ('L', True), ('L', False),
+                           ('D', True), ('D', False),
+                           ('R', True), ('R', False),
+                           ('B', True), ('B', False)]
         if self.difficulty == 1:
             # Initial observation: R CCW → U CCW → B CW
-            # self.rotate_face('R', clockwise=False)
-            # self.rotate_face('U', clockwise=False)
-            # self.rotate_face('B', clockwise=True)
-            # self.rotate_face('D', clockwise=False)
-            # self.rotate_face('L', clockwise=True)
+            moves = [('R', False), ('U', False), ('B', True)]
+        elif self.difficulty == 2:
             moves = [('R', False), ('U', False), ('B', True), ('D', False), ('L', True), ('F', False)]
-            for face, clockwise in moves:
-                self.rotate_face(face, clockwise)
-                move_name = face + ("" if clockwise else "'")
-                self.scrambled_steps.append(move_name)
-        if self.difficulty == 2:
+        elif self.difficulty == 3:
             # More complex scramble
-            moves = [('R', False), ('U', False), ('B', True), ('L', True), ('D', False), ('F', True), ('R', True), ('U', True)]
-            for face, clockwise in moves:
-                self.rotate_face(face, clockwise)
-                move_name = face + ("" if clockwise else "'")
-                self.scrambled_steps.append(move_name)
-        if self.difficulty >= 3:
-            for i in range(self.difficulty):
-                face = faces[np.random.randint(0,6)]
-                clockwise = np.random.choice([True, False])
-                self.rotate_face(face, clockwise)
-                move_name = face + ("" if clockwise else "'")
-                self.scrambled_steps.append(move_name)
+            #moves = [('R', False), ('U', False), ('B', True), ('L', True), ('D', False), ('F', True), ('R', True), ('U', True)]
+            moves = [('R', False), ('U', False), ('B', True), ('D', False), ('L', True), ('F', False), ('R', True), ('B', False), ('L', True), ('U', False)]
+        elif self.difficulty == 4:
+            # 14 random moves 
+            moves = random.choices(available_moves, k=14)
+        else:
+            raise ValueError(f"Invalid difficulty level: 1-4 are available")
+
+        for face, clockwise in moves:
+            self.rotate_face(face, clockwise)
+            move_name = face + ("" if clockwise else "'")
+            self.scrambled_steps.append(move_name)
 
     def dict_to_array(self, cube_dict):
         arr = np.zeros((6, self.size, self.size), dtype=np.int8)

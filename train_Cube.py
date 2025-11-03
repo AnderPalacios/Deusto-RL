@@ -8,7 +8,7 @@ import time
 
 
 def make_env():
-    return RubikCube(size=3, difficulty_level=1, render_mode="None")
+    return RubikCube(size=3, difficulty_level=3, render_mode="None")
 
 
 env = VecMonitor(DummyVecEnv([make_env]))
@@ -37,7 +37,7 @@ model = PPO(
 
 
 
-model.learn(total_timesteps=35000) # 100000
+model.learn(total_timesteps=30_000) # 350000 -> diff=2
 
 
 inner_env = env.envs[0]
