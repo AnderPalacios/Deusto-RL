@@ -21,7 +21,7 @@ def make_env():
 # ==========================================
 def objective(trial):
     # --- Choose algorithm ---
-    algo_name = trial.suggest_categorical("algo", ["PPO", "A2C"])
+    algo_name = trial.suggest_categorical("algo", ["PPO"])
 
     # --- Common hyperparameters ---
     learning_rate = trial.suggest_loguniform("learning_rate", 1e-5, 1e-3)
@@ -69,20 +69,6 @@ def objective(trial):
             tensorboard_log=log_dir,
             device="cpu",
         )
-    else:  # A2C
-        model = A2C(
-            "MlpPolicy",
-            env,
-            learning_rate=learning_rate,
-            n_steps=n_steps,
-            gamma=gamma,
-            gae_lambda=gae_lambda,
-            ent_coef=ent_coef,
-            vf_coef=vf_coef,
-            verbose=0,
-            tensorboard_log=log_dir,
-            device="cpu",
-        )
 
     # --- Custom logger for each trial ---
     new_logger = configure(log_dir, ["stdout", "tensorboard"])
@@ -117,7 +103,7 @@ if __name__ == "__main__":
     )
 
     # Optimize
-    study.optimize(objective, n_trials=8, n_jobs=1)  # reduce n_trials for testing
+    study.optimize(objective, n_trials=8, n_jobs=2)  # reduce n_trials for testing
 
     print("\n✅ Optimization finished.")
     print("Best trial:")
